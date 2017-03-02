@@ -1,67 +1,163 @@
 ﻿using UnityEngine;
 using System.Collections;
+using System.Globalization;
+using UnityEngine.Assertions.Must;
+using UnityEngine.UI;
 
-public class PlayerScript : MonoBehaviour {
+public class PlayerScript : MonoBehaviour
+{
     public bool flipped = false;
     public Sprite SplatSprite;
+    public Sprite scaredSprite;
     Vector2 StartSize;
     private bool splat = false;
-    private float growthSpeed = 1f;
+    public float growthSpeed = 1f;
+    public float speed = 0.1f, orgSpeed;
+    private Rigidbody2D rb;
+    private SpriteRenderer spriteRenderer;
+    public float timer = 0;
+    public float timeToAnimate = 5;
+    private bool scared = false;
+    public Sprite[] sprites;
+    private Animator anim;
+    [HideInInspector]
+    public bool continueGrowing = true;
 
-    void Start() {
+    public Slider HealthSlider;
+    private float percentBase;
+
+    void Start()
+    {
+        orgSpeed = speed;
+        anim = GetComponent<Animator>();
+        spriteRenderer = GetComponent<SpriteRenderer>();
         StartSize = transform.localScale;
+        rb = GetComponent<Rigidbody2D>();
     }
 
-    void Update() {
-        if (GameManagerScript.instance.GameOver == false) {
-            Movement();
-            if (splat == false) {
+    void Update()
+    {
+        if (GameManagerScript.instance.GameOver == false)
+        {
+            //Timer();
+            if (splat == false && continueGrowing == true)
+            {
                 Grow();
             }
         }
     }
 
-    void OnTriggerStay2D(Collider2D col) {
-        if (col.gameObject.tag == "Wall") {
+    void Timer()
+    {
+        timer += Time.deltaTime;
+        if (timer > timeToAnimate)
+        {
+            timer = 0;
+        }
+    }
+
+    void FixedUpdate()
+    {
+        if (GameManagerScript.instance.GameOver == false)
+        {
+            Movement();
+        }
+    }
+
+    void OnCollisionEnter2D(Collision2D col)
+    {
+        if (col.gameObject.tag == "Wall")
+        {
+            scared = true;
             growthSpeed = 2f;
+            anim.SetBool("IsScared", true);
         }
     }
 
-    void OnTriggerExit2D(Collider2D col) {
-        if (col.gameObject.tag == "Wall") {
+    void OnCollisionExit2D(Collision2D col)
+    {
+        if (col.gameObject.tag == "Wall")
+        {
+            scared = false;
             growthSpeed = 1f;
+            anim.SetBool("IsScared", false);
         }
     }
 
-    void Grow() {//magic numbers ftw
-        transform.localScale = new Vector3(transform.localScale.x + ((flipped ? -0.0001f : 0.0001f) * growthSpeed), transform.localScale.y + 0.0001f * growthSpeed, transform.localScale.z + 0.0001f);
-        if (transform.localScale.x > (StartSize.x * 2) && transform.localScale.y > (StartSize.y * 2)) {
-            GetComponent<SpriteRenderer>().sprite = SplatSprite;
+    void Grow()
+    {
+        var newScaleX = transform.localScale.x + 0.0001f * (flipped ? -growthSpeed : growthSpeed);
+        var newScaleY = transform.localScale.y + 0.0001f * growthSpeed;
+        transform.localScale = new Vector3(newScaleX, newScaleY, 0);
+
+        var maxSize = StartSize.x * 2;
+        var sizeValue = transform.localScale.x / maxSize;
+        HealthSlider.value = sizeValue;
+
+        if (Mathf.Abs(transform.localScale.x) > (Mathf.Abs(StartSize.x * 2)) && transform.localScale.y > (StartSize.y * 2))
+        {
+            spriteRenderer.sprite = SplatSprite;
             splat = true;
-            GameManagerScript.instance.GameOver = true;
+            anim.SetBool("IsDead", true);
+            GameManagerScript.instance.GameOverFunction();
         }
     }
 
-    void Movement() {
-        if (Input.GetKey(KeyCode.A)) {
+    void Movement()
+    {
+        if (Input.GetKey(KeyCode.A))
+        {
             transform.eulerAngles = new Vector2(0, 180);
-            transform.position = ChangePositionVector2(-0.1f, 0, transform.position);
+            rb.MovePosition(rb.position + Vector2.left * speed * (flipped ? -1 : 1));
         }
-        if (Input.GetKey(KeyCode.D)) {
+        if (Input.GetKey(KeyCode.D))
+        {
             transform.eulerAngles = new Vector2(0, 0);
-            transform.position = ChangePositionVector2(0.1f, 0, transform.position);
+            rb.MovePosition(rb.position + Vector2.right * speed * (flipped ? -1 : 1));
         }
-        if (Input.GetKey(KeyCode.W)) {
+        if (Input.GetKey(KeyCode.W))
+        {
             transform.eulerAngles = new Vector2(0, 0);
-            transform.position = ChangePositionVector2(0, 0.1f, transform.position);
+            rb.MovePosition(rb.position + Vector2.up * speed);
         }
-        if (Input.GetKey(KeyCode.S)) {
+        if (Input.GetKey(KeyCode.S))
+        {
             transform.eulerAngles = new Vector2(0, 0);
-            transform.position = ChangePositionVector2(0, -0.1f, transform.position);
+            rb.MovePosition(rb.position + Vector2.down * speed);
         }
     }
 
-    Vector2 ChangePositionVector2(float x, float y, Vector2 oldVector2) {
-        return new Vector2(oldVector2.x + x, oldVector2.y + y);
+    public void StopGrowingTemporarily(float waitTime)
+    {
+        continueGrowing = false;
+        HealthSlider.GetComponentInChildren<Image>().color = Color.green;
+        StartCoroutine(StopGrowingCoroutine(waitTime));
+    }
+
+    IEnumerator StopGrowingCoroutine(float waitTime)
+    {
+        while (true)
+        {
+            yield return new WaitForSeconds(waitTime);
+            HealthSlider.GetComponentInChildren<Image>().color = Color.grey;
+            continueGrowing = true;
+            break;
+        }
+    }
+
+    public void AddSpeedTemporarily(float speedMultiplier, float waitTime)
+    {
+        speed *= speedMultiplier;
+        StartCoroutine(AddSpeedCoroutine(waitTime));
+    }
+
+    IEnumerator AddSpeedCoroutine(float waitTime)
+    {
+        while (true)
+        {
+            yield return new WaitForSeconds(waitTime);
+            speed = orgSpeed;
+            break;
+        }
     }
 }
