@@ -10,14 +10,17 @@ public class PickupScript : MonoBehaviour
 
     void OnTriggerEnter2D(Collider2D c)
     {
+        var script = c.GetComponent<PlayerScript>();
         if (transform.tag == "PickupStopGrowing")
         {
-            c.GetComponent<PlayerScript>().StopGrowingTemporarily(WaitTime);
+            script.StopGrowingTemporarily(WaitTime);
+            script.pickupSoundSGrowth.Play();
         }
         else if (transform.tag == "PickupAddSpeed")
         {
-            c.GetComponent<PlayerScript>().AddSpeedTemporarily(SpeedMultiplier, 5f);
-        }
+            script.AddSpeedTemporarily(SpeedMultiplier, 5f);
+            script.pickupSoundSpeed.Play();
+        } 
         Destroy(gameObject);
     }
 }
